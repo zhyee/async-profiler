@@ -9,14 +9,14 @@ API_JAR=lib/async-profiler.jar
 CONVERTER_JAR=lib/converter.jar
 
 CFLAGS=-O3 -fno-exceptions
-CXXFLAGS=-O3 -fno-exceptions -fno-omit-frame-pointer -fvisibility=hidden
+CXXFLAGS=-g -fno-exceptions -fno-omit-frame-pointer -fvisibility=hidden
 INCLUDES=-I$(JAVA_HOME)/include -Isrc/helper
 LIBS=-ldl -lpthread
 MERGE=true
 
 JAVAC=$(JAVA_HOME)/bin/javac
 JAR=$(JAVA_HOME)/bin/jar
-JAVA_TARGET=7
+JAVA_TARGET=8
 JAVAC_OPTIONS=--release $(JAVA_TARGET) -Xlint:-options
 
 SOURCES := $(wildcard src/*.cpp)

@@ -174,6 +174,11 @@ static int pthread_setspecific_hook(pthread_key_t key, const void* value) {
 }
 
 static void** lookupThreadEntry() {
+    if (!VM::loaded()) {
+        static void* dummy_pthread_entry;
+        return &dummy_pthread_entry;
+    }
+
     // Depending on Zing version, pthread_setspecific is called either from libazsys.so or from libjvm.so
     if (VM::isZing()) {
         CodeCache* libazsys = Profiler::instance()->findLibraryByName("libazsys");

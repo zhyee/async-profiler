@@ -729,8 +729,10 @@ void* Profiler::dlopen_hook(const char* filename, int flags) {
 }
 
 void Profiler::switchLibraryTrap(bool enable) {
-    void* impl = enable ? (void*)dlopen_hook : (void*)dlopen;
-    __atomic_store_n(_dlopen_entry, impl, __ATOMIC_RELEASE);
+    if (VM::loaded()) {
+        void* impl = enable ? (void*)dlopen_hook : (void*)dlopen;
+        __atomic_store_n(_dlopen_entry, impl, __ATOMIC_RELEASE);
+    }
 }
 
 Error Profiler::installTraps(const char* begin, const char* end) {
@@ -832,7 +834,7 @@ void Profiler::updateThreadName(jvmtiEnv* jvmti, JNIEnv* jni, jthread thread) {
 }
 
 void Profiler::updateJavaThreadNames() {
-    if (_update_thread_names) {
+    if (_update_thread_names && VM::loaded()) {
         jvmtiEnv* jvmti = VM::jvmti();
         jint thread_count;
         jthread* thread_objects;
@@ -929,23 +931,25 @@ Engine* Profiler::activeEngine() {
 }
 
 Error Profiler::checkJvmCapabilities() {
-    if (!VMStructs::hasJavaThreadId()) {
-        return Error("Could not find Thread ID field. Unsupported JVM?");
-    }
-
-    if (VMThread::key() < 0) {
-        return Error("Could not find VMThread bridge. Unsupported JVM?");
-    }
-
-    if (_dlopen_entry == NULL) {
-        CodeCache* lib = findJvmLibrary("libj9prt");
-        if (lib == NULL || (_dlopen_entry = lib->findGlobalOffsetEntry((void*)dlopen)) == NULL) {
-            return Error("Could not set dlopen hook. Unsupported JVM?");
+    if (VM::loaded()) {
+        if (!VMStructs::hasJavaThreadId()) {
+            return Error("Could not find Thread ID field. Unsupported JVM?");
         }
-    }
 
-    if (!VMStructs::libjvm()->hasDebugSymbols()) {
-        Log::warn("Install JVM debug symbols to improve profile accuracy");
+        if (VMThread::key() < 0) {
+            return Error("Could not find VMThread bridge. Unsupported JVM?");
+        }
+
+        if (_dlopen_entry == NULL) {
+            CodeCache* lib = findJvmLibrary("libj9prt");
+            if (lib == NULL || (_dlopen_entry = lib->findGlobalOffsetEntry((void*)dlopen)) == NULL) {
+                return Error("Could not set dlopen hook. Unsupported JVM?");
+            }
+        }
+
+        if (!VMStructs::libjvm()->hasDebugSymbols()) {
+            Log::warn("Install JVM debug symbols to improve profile accuracy");
+        }
     }
 
     return Error::OK;
@@ -1087,7 +1091,7 @@ Error Profiler::start(Arguments& args, bool reset) {
 
     if (args._timeout != 0 || args._output == OUTPUT_JFR) {
         _stop_time = addTimeout(_start_time, args._timeout);
-        startTimer();
+        // startTimer();
     }
 
     return Error::OK;
@@ -1258,7 +1262,7 @@ void Profiler::unlockAll() {
 }
 
 void Profiler::switchThreadEvents(jvmtiEventMode mode) {
-    if (_thread_events_state != mode) {
+    if (_thread_events_state != mode && VM::loaded()) {
         jvmtiEnv* jvmti = VM::jvmti();
         jvmti->SetEventNotificationMode(mode, JVMTI_EVENT_THREAD_START, NULL);
         jvmti->SetEventNotificationMode(mode, JVMTI_EVENT_THREAD_END, NULL);

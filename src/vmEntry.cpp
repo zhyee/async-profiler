@@ -20,6 +20,7 @@
 #include <sys/mman.h>
 #include "vmEntry.h"
 #include "arguments.h"
+#include "asprof.h"
 #include "j9Ext.h"
 #include "j9ObjectSampler.h"
 #include "javaApi.h"

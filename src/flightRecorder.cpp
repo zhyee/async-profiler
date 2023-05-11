@@ -482,7 +482,8 @@ class Recording {
         _chunk_time = args._chunk_time <= 0 ? MAX_JLONG : (args._chunk_time < 5 ? 5 : args._chunk_time) * 1000000ULL;
 
         _tid = OS::threadId();
-        VM::jvmti()->GetAvailableProcessors(&_available_processors);
+        // VM::jvmti()->GetAvailableProcessors(&_available_processors);
+        _available_processors = 1;
 
         writeHeader(_buf);
         writeMetadata(_buf);
@@ -490,10 +491,10 @@ class Recording {
         writeSettings(_buf, args);
         if (!args.hasOption(NO_SYSTEM_INFO)) {
             writeOsCpuInfo(_buf);
-            writeJvmInfo(_buf);
+            // writeJvmInfo(_buf);
         }
         if (!args.hasOption(NO_SYSTEM_PROPS)) {
-            writeSystemProperties(_buf);
+            // writeSystemProperties(_buf);
         }
         if (!args.hasOption(NO_NATIVE_LIBS)) {
             _recorded_lib_count = 0;
@@ -812,7 +813,7 @@ class Recording {
             writeIntSetting(buf, T_MONITOR_ENTER, "lock", args._lock);
         }
 
-        writeBoolSetting(buf, T_ACTIVE_RECORDING, "debugSymbols", VMStructs::libjvm()->hasDebugSymbols());
+        writeBoolSetting(buf, T_ACTIVE_RECORDING, "debugSymbols", VM::loaded() && VMStructs::libjvm()->hasDebugSymbols());
         writeBoolSetting(buf, T_ACTIVE_RECORDING, "kernelSymbols", Symbols::haveKernelSymbols());
     }
 
@@ -1298,7 +1299,7 @@ Error FlightRecorder::start(Arguments& args, bool reset) {
         free(filename_tmp);
     }
 
-    VM::jvmti()->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_GARBAGE_COLLECTION_FINISH, NULL);
+    // VM::jvmti()->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_GARBAGE_COLLECTION_FINISH, NULL);
 
     _rec = new Recording(fd, master_recording_file, args);
     _rec_lock.unlock();
@@ -1313,7 +1314,7 @@ void FlightRecorder::stop() {
             stopMasterRecording();
         }
 
-        VM::jvmti()->SetEventNotificationMode(JVMTI_DISABLE, JVMTI_EVENT_GARBAGE_COLLECTION_FINISH, NULL);
+        // VM::jvmti()->SetEventNotificationMode(JVMTI_DISABLE, JVMTI_EVENT_GARBAGE_COLLECTION_FINISH, NULL);
 
         delete _rec;
         _rec = NULL;

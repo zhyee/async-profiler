@@ -190,6 +190,7 @@ class Profiler {
 
     Dictionary* classMap() { return &_class_map; }
     ThreadFilter* threadFilter() { return &_thread_filter; }
+    CodeCacheArray* nativeLibs() { return &_native_libs; }
 
     Error run(Arguments& args);
     Error runInternal(Arguments& args, std::ostream& out);
