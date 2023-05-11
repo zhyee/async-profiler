@@ -44,10 +44,11 @@ DLLEXPORT void asprof_init() {
     OS::installSignalHandler(WAKEUP_SIGNAL, NULL, asprof_wakeup_handler);
 
     Hooks::init();
+    Hooks::patchLibraries();
 
     atexit(asprof_shutdown);
 
-    Log::info("Profiler initialized");
+    Log::debug("Profiler initialized");
 }
 
 DLLEXPORT const char* asprof_error_str(asprof_error_t err) {

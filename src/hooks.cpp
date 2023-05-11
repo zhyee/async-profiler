@@ -17,6 +17,7 @@
 
 #include <dlfcn.h>
 #include <pthread.h>
+#include <string.h>
 #include "hooks.h"
 #include "os.h"
 #include "perfEvents.h"
@@ -44,12 +45,12 @@ static void* thread_start_wrapper(void* e) {
 
     int threadId = OS::threadId();
     PerfEvents::createForThread(threadId);
-    printf("thread start: %d\n", threadId);
+    Log::debug("thread_start: %d", threadId);
 
     void* result = start_routine(arg);
 
     PerfEvents::destroyForThread(threadId);
-    printf("thread self-exit: %d\n", threadId);
+    Log::debug("thread_end: %d", threadId);
     return result;
 }
 
@@ -66,7 +67,7 @@ int pthread_create_hook(pthread_t* thread, const pthread_attr_t* attr, ThreadFun
 }
 
 void pthread_exit_hook(void* retval) {
-    printf("thread exit: %d\n", OS::threadId());
+    Log::debug("thread_exit: %d", OS::threadId());
     _orig_pthread_exit(retval);
 }
 
@@ -75,6 +76,7 @@ typedef void* (*dlopen_t)(const char*, int);
 static dlopen_t _orig_dlopen = NULL;
 
 void* dlopen_hook(const char* filename, int flags) {
+    Log::debug("dlopen: %s", filename);
     void* result = _orig_dlopen(filename, flags);
     if (result != NULL) {
         Profiler::instance()->updateSymbols(false);
@@ -104,11 +106,12 @@ void Hooks::patchLibraries() {
         cc->makeGotPatchable();
 
         for (void** entry = cc->gotStart(); entry < cc->gotEnd(); entry++) {
-            if (*entry == (void*)_orig_pthread_create) {
+            const char* sym = cc->binarySearch(*entry);
+            if (*entry == (void*)_orig_pthread_create || strcmp(sym, "pthread_create@plt") == 0) {
                 *entry = (void*)pthread_create_hook;
-            } else if (*entry == (void*)_orig_pthread_exit) {
+            } else if (*entry == (void*)_orig_pthread_exit || strcmp(sym, "pthread_exit@plt") == 0) {
                 *entry = (void*)pthread_exit_hook;
-            } else if (*entry == (void*)_orig_dlopen) {
+            } else if (*entry == (void*)_orig_dlopen || strcmp(sym, "dlopen@plt") == 0) {
                 *entry = (void*)dlopen_hook;
             }
         }
