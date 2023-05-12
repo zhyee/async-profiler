@@ -17,6 +17,7 @@
 
 #include <dlfcn.h>
 #include <pthread.h>
+#include <signal.h>
 #include <string.h>
 #include "hooks.h"
 #include "os.h"
@@ -37,11 +38,21 @@ static pthread_create_t _orig_pthread_create = NULL;
 typedef void (*pthread_exit_t)(void*);
 static pthread_exit_t _orig_pthread_exit = NULL;
 
+static void unblock_signals() {
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGPROF);
+    sigaddset(&set, SIGVTALRM);
+    pthread_sigmask(SIG_UNBLOCK, &set, NULL);
+}
+
 static void* thread_start_wrapper(void* e) {
     ThreadEntry* entry = (ThreadEntry*)e;
     ThreadFunc start_routine = entry->start_routine;
     void* arg = entry->arg;
     free(entry);
+
+    unblock_signals();
 
     int threadId = OS::threadId();
     PerfEvents::createForThread(threadId);
@@ -67,7 +78,10 @@ int pthread_create_hook(pthread_t* thread, const pthread_attr_t* attr, ThreadFun
 }
 
 void pthread_exit_hook(void* retval) {
-    Log::debug("thread_exit: %d", OS::threadId());
+    int threadId = OS::threadId();
+    PerfEvents::destroyForThread(threadId);
+    Log::debug("thread_exit: %d", threadId);
+
     _orig_pthread_exit(retval);
 }
 
@@ -78,7 +92,7 @@ static dlopen_t _orig_dlopen = NULL;
 void* dlopen_hook(const char* filename, int flags) {
     Log::debug("dlopen: %s", filename);
     void* result = _orig_dlopen(filename, flags);
-    if (result != NULL) {
+    if (result != NULL && filename != NULL) {
         Profiler::instance()->updateSymbols(false);
         Hooks::patchLibraries();
     }
