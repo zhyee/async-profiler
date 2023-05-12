@@ -47,8 +47,6 @@ DLLEXPORT void asprof_init() {
     Hooks::patchLibraries();
 
     atexit(asprof_shutdown);
-
-    Log::debug("Profiler initialized");
 }
 
 DLLEXPORT const char* asprof_error_str(asprof_error_t err) {
@@ -71,6 +69,8 @@ DLLEXPORT asprof_error_t asprof_execute(const char* command, asprof_writer_t out
         if (!error) {
             if (output_callback != NULL) {
                 output_callback(out.str().data(), out.str().size());
+            } else {
+                std::cout.write(out.str().data(), out.str().size());
             }
             return NULL;
         }

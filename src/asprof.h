@@ -17,6 +17,8 @@
 #ifndef _ASPROF_H
 #define _ASPROF_H
 
+#include <stddef.h>
+
 #ifdef __clang__
 #  define DLLEXPORT __attribute__((visibility("default")))
 #else
