@@ -143,7 +143,15 @@ class Profiler {
     void startTimer();
     void stopTimer();
     void timerLoop(void* timer_id);
-    static void timerThreadEntry(jvmtiEnv* jvmti, JNIEnv* jni, void* arg);
+
+    static void jvmtiTimerEntry(jvmtiEnv* jvmti, JNIEnv* jni, void* arg) {
+        instance()->timerLoop(arg);
+    }
+
+    static void* pthreadTimerEntry(void* arg) {
+        instance()->timerLoop(arg);
+        return NULL;
+    }
 
     void lockAll();
     void unlockAll();

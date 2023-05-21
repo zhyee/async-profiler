@@ -1091,7 +1091,7 @@ Error Profiler::start(Arguments& args, bool reset) {
 
     if (args._timeout != 0 || args._output == OUTPUT_JFR) {
         _stop_time = addTimeout(_start_time, args._timeout);
-        // startTimer();
+        startTimer();
     }
 
     return Error::OK;
@@ -1476,26 +1476,38 @@ time_t Profiler::addTimeout(time_t start, int timeout) {
 }
 
 void Profiler::startTimer() {
-    JNIEnv* jni = VM::jni();
-    jclass Thread = jni->FindClass("java/lang/Thread");
-    jmethodID init = jni->GetMethodID(Thread, "<init>", "(Ljava/lang/String;)V");
-    jmethodID setDaemon = jni->GetMethodID(Thread, "setDaemon", "(Z)V");
+    if (VM::loaded()) {
+        JNIEnv* jni = VM::jni();
+        jclass Thread = jni->FindClass("java/lang/Thread");
+        jmethodID init = jni->GetMethodID(Thread, "<init>", "(Ljava/lang/String;)V");
+        jmethodID setDaemon = jni->GetMethodID(Thread, "setDaemon", "(Z)V");
 
-    jstring name = jni->NewStringUTF("Async-profiler Timer");
-    if (name != NULL && init != NULL && setDaemon != NULL) {
-        jthread thread_obj = jni->NewObject(Thread, init, name);
-        if (thread_obj != NULL) {
-            jni->CallVoidMethod(thread_obj, setDaemon, JNI_TRUE);
-            MutexLocker ml(_timer_lock);
-            _timer_id = (void*)(intptr_t)(0x80000000 | _epoch);
-            if (VM::jvmti()->RunAgentThread(thread_obj, timerThreadEntry, _timer_id, JVMTI_THREAD_NORM_PRIORITY) == 0) {
-                return;
+        jstring name = jni->NewStringUTF("Async-profiler Timer");
+        if (name != NULL && init != NULL && setDaemon != NULL) {
+            jthread thread_obj = jni->NewObject(Thread, init, name);
+            if (thread_obj != NULL) {
+                jni->CallVoidMethod(thread_obj, setDaemon, JNI_TRUE);
+                MutexLocker ml(_timer_lock);
+                _timer_id = (void*)(intptr_t)(0x80000000 | _epoch);
+                if (VM::jvmti()->RunAgentThread(thread_obj, jvmtiTimerEntry, _timer_id, JVMTI_THREAD_NORM_PRIORITY) == 0) {
+                    return;
+                }
+                _timer_id = NULL;
             }
-            _timer_id = NULL;
         }
-    }
 
-    jni->ExceptionDescribe();
+        jni->ExceptionDescribe();
+    } else {
+        // If profiling a native app, start a raw pthread instead of a JVM thread
+        MutexLocker ml(_timer_lock);
+        _timer_id = (void*)(intptr_t)(0x80000000 | _epoch);
+        pthread_t thread;
+        if (pthread_create(&thread, NULL, pthreadTimerEntry, _timer_id) == 0) {
+            pthread_detach(thread);
+            return;
+        }
+        _timer_id = NULL;
+    }
 }
 
 void Profiler::stopTimer() {
@@ -1534,10 +1546,6 @@ void Profiler::timerLoop(void* timer_id) {
 
         sleep_until = current_micros + 1000000;
     }
-}
-
-void Profiler::timerThreadEntry(jvmtiEnv* jvmti, JNIEnv* jni, void* arg) {
-    instance()->timerLoop(arg);
 }
 
 Error Profiler::runInternal(Arguments& args, std::ostream& out) {
