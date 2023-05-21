@@ -482,8 +482,7 @@ class Recording {
         _chunk_time = args._chunk_time <= 0 ? MAX_JLONG : (args._chunk_time < 5 ? 5 : args._chunk_time) * 1000000ULL;
 
         _tid = OS::threadId();
-        // VM::jvmti()->GetAvailableProcessors(&_available_processors);
-        _available_processors = 1;
+        _available_processors = OS::getCpuCount();
 
         writeHeader(_buf);
         writeMetadata(_buf);
@@ -491,10 +490,10 @@ class Recording {
         writeSettings(_buf, args);
         if (!args.hasOption(NO_SYSTEM_INFO)) {
             writeOsCpuInfo(_buf);
-            // writeJvmInfo(_buf);
+            writeJvmInfo(_buf);
         }
         if (!args.hasOption(NO_SYSTEM_PROPS)) {
-            // writeSystemProperties(_buf);
+            writeSystemProperties(_buf);
         }
         if (!args.hasOption(NO_NATIVE_LIBS)) {
             _recorded_lib_count = 0;
@@ -876,7 +875,7 @@ class Recording {
     }
 
     void writeJvmInfo(Buffer* buf) {
-        if (_agent_properties == NULL && !parseAgentProperties()) {
+        if (_agent_properties == NULL && !(VM::loaded() && parseAgentProperties())) {
             return;
         }
 
@@ -908,7 +907,7 @@ class Recording {
         jvmtiEnv* jvmti = VM::jvmti();
         jint count;
         char** keys;
-        if (jvmti->GetSystemProperties(&count, &keys) != 0) {
+        if (!VM::loaded() || jvmti->GetSystemProperties(&count, &keys) != 0) {
             return;
         }
 
@@ -1299,8 +1298,6 @@ Error FlightRecorder::start(Arguments& args, bool reset) {
         free(filename_tmp);
     }
 
-    // VM::jvmti()->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_GARBAGE_COLLECTION_FINISH, NULL);
-
     _rec = new Recording(fd, master_recording_file, args);
     _rec_lock.unlock();
     return Error::OK;
@@ -1313,8 +1310,6 @@ void FlightRecorder::stop() {
         if (_rec->hasMasterRecording()) {
             stopMasterRecording();
         }
-
-        // VM::jvmti()->SetEventNotificationMode(JVMTI_DISABLE, JVMTI_EVENT_GARBAGE_COLLECTION_FINISH, NULL);
 
         delete _rec;
         _rec = NULL;
