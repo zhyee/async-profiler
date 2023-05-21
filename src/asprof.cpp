@@ -21,32 +21,14 @@
 #include "profiler.h"
 
 
-static void asprof_wakeup_handler(int signo) {
-    // Dummy handler for interrupting syscalls
-}
-
 static asprof_error_t asprof_error(const char* msg) {
     return (asprof_error_t)msg;
 }
 
-static void asprof_shutdown() {
-    Profiler* profiler = Profiler::instance();
-    if (profiler != NULL) {
-        profiler->stop();
-    }
-}
-
 
 DLLEXPORT void asprof_init() {
-    Profiler* profiler = Profiler::instance();
-    profiler->updateSymbols(false);
-    Profiler::setupSignalHandlers();
-    OS::installSignalHandler(WAKEUP_SIGNAL, NULL, asprof_wakeup_handler);
-
     Hooks::init();
     Hooks::patchLibraries();
-
-    atexit(asprof_shutdown);
 }
 
 DLLEXPORT const char* asprof_error_str(asprof_error_t err) {

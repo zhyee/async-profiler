@@ -27,6 +27,7 @@ class Hooks {
 
   public:
     static void init();
+    static void shutdown();
     static void patchLibraries();
 };
 

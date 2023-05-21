@@ -18,8 +18,10 @@
 #include <dlfcn.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdlib.h>
 #include <string.h>
 #include "hooks.h"
+#include "asprof.h"
 #include "os.h"
 #include "perfEvents.h"
 #include "profiler.h"
@@ -37,6 +39,10 @@ static pthread_create_t _orig_pthread_create = NULL;
 
 typedef void (*pthread_exit_t)(void*);
 static pthread_exit_t _orig_pthread_exit = NULL;
+
+static void hooks_wakeup_handler(int signo) {
+    // Dummy handler for interrupting syscalls
+}
 
 static void unblock_signals() {
     sigset_t set;
@@ -65,7 +71,7 @@ static void* thread_start_wrapper(void* e) {
     return result;
 }
 
-int pthread_create_hook(pthread_t* thread, const pthread_attr_t* attr, ThreadFunc start_routine, void* arg) {
+static int pthread_create_hook(pthread_t* thread, const pthread_attr_t* attr, ThreadFunc start_routine, void* arg) {
     ThreadEntry* entry = (ThreadEntry*) malloc(sizeof(ThreadEntry));
     entry->start_routine = start_routine;
     entry->arg = arg;
@@ -77,7 +83,7 @@ int pthread_create_hook(pthread_t* thread, const pthread_attr_t* attr, ThreadFun
    return result;
 }
 
-void pthread_exit_hook(void* retval) {
+static void pthread_exit_hook(void* retval) {
     int threadId = OS::threadId();
     PerfEvents::destroyForThread(threadId);
     Log::debug("thread_exit: %d", threadId);
@@ -89,14 +95,49 @@ void pthread_exit_hook(void* retval) {
 typedef void* (*dlopen_t)(const char*, int);
 static dlopen_t _orig_dlopen = NULL;
 
-void* dlopen_hook(const char* filename, int flags) {
+static void* dlopen_hook(const char* filename, int flags) {
     Log::debug("dlopen: %s", filename);
     void* result = _orig_dlopen(filename, flags);
     if (result != NULL && filename != NULL) {
         Profiler::instance()->updateSymbols(false);
-        Hooks::patchLibraries();
+        if (_orig_pthread_create != NULL) {
+            Hooks::patchLibraries();
+        }
     }
     return result;
+}
+
+
+// LD_PRELOAD hooks
+
+extern "C" DLLEXPORT
+int pthread_create(pthread_t* thread, const pthread_attr_t* attr, ThreadFunc start_routine, void* arg) {
+    if (_orig_pthread_create == NULL) {
+        _orig_pthread_create = (pthread_create_t)dlsym(RTLD_NEXT, "pthread_create");
+    }
+    return pthread_create_hook(thread, attr, start_routine, arg);
+}
+
+extern "C" DLLEXPORT
+void pthread_exit(void* retval) {
+    if (_orig_pthread_exit == NULL) {
+        _orig_pthread_exit = (pthread_exit_t)dlsym(RTLD_NEXT, "pthread_exit");
+    }
+    pthread_exit_hook(retval);
+    abort();  // to suppress gcc warning
+}
+
+extern "C" DLLEXPORT
+void* dlopen(const char* filename, int flags) {
+    if (_orig_dlopen == NULL) {
+        _orig_dlopen = (dlopen_t)dlsym(RTLD_NEXT, "dlopen");
+        Hooks::init();
+        const char* command = getenv("ASPROF_EXEC");
+        if (command != NULL) {
+            asprof_execute(command, NULL);
+        }
+    }
+    return dlopen_hook(filename, flags);
 }
 
 
@@ -104,9 +145,25 @@ Mutex Hooks::_patch_lock;
 int Hooks::_patched_libs = 0;
 
 void Hooks::init() {
-    _orig_pthread_create = pthread_create;
-    _orig_pthread_exit = pthread_exit;
-    _orig_dlopen = dlopen;
+    Profiler* profiler = Profiler::instance();
+    profiler->updateSymbols(false);
+    Profiler::setupSignalHandlers();
+    OS::installSignalHandler(WAKEUP_SIGNAL, NULL, hooks_wakeup_handler);
+
+    atexit(shutdown);
+
+    if (_orig_dlopen == NULL) {
+        _orig_pthread_create = pthread_create;
+        _orig_pthread_exit = pthread_exit;
+        _orig_dlopen = dlopen;
+    }
+}
+
+void Hooks::shutdown() {
+    Profiler* profiler = Profiler::instance();
+    if (profiler != NULL) {
+        profiler->stop();
+    }
 }
 
 void Hooks::patchLibraries() {
