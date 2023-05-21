@@ -18,22 +18,15 @@ package one.jfr.event;
 
 import one.jfr.JfrReader;
 
-public class GCHeapSummary extends Event {
-    public final int gcId;
-    public final boolean afterGC;
-    public final long committed;
-    public final long reserved;
-    public final long used;
+public class CPULoad extends Event {
+    public final float jvmUser;
+    public final float jvmSystem;
+    public final float machineTotal;
 
-    public GCHeapSummary(JfrReader jfr) {
+    public CPULoad(JfrReader jfr) {
         super(jfr.getVarlong(), 0, 0);
-        this.gcId = jfr.getVarint();
-        this.afterGC = jfr.getVarint() > 0;
-        long start = jfr.getVarlong();
-        long committedEnd = jfr.getVarlong();
-        this.committed = jfr.getVarlong();
-        long reservedEnd = jfr.getVarlong();
-        this.reserved = jfr.getVarlong();
-        this.used = jfr.getVarlong();
+        this.jvmUser = jfr.getFloat();
+        this.jvmSystem = jfr.getFloat();
+        this.machineTotal = jfr.getFloat();
     }
 }

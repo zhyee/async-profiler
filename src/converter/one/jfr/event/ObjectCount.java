@@ -18,22 +18,17 @@ package one.jfr.event;
 
 import one.jfr.JfrReader;
 
-public class GCHeapSummary extends Event {
+public class ObjectCount extends Event {
     public final int gcId;
-    public final boolean afterGC;
-    public final long committed;
-    public final long reserved;
-    public final long used;
+    public final int classId;
+    public final long count;
+    public final long totalSize;
 
-    public GCHeapSummary(JfrReader jfr) {
+    public ObjectCount(JfrReader jfr) {
         super(jfr.getVarlong(), 0, 0);
         this.gcId = jfr.getVarint();
-        this.afterGC = jfr.getVarint() > 0;
-        long start = jfr.getVarlong();
-        long committedEnd = jfr.getVarlong();
-        this.committed = jfr.getVarlong();
-        long reservedEnd = jfr.getVarlong();
-        this.reserved = jfr.getVarlong();
-        this.used = jfr.getVarlong();
+        this.classId = jfr.getVarint();
+        this.count = jfr.getVarlong();
+        this.totalSize = jfr.getVarlong();
     }
 }
